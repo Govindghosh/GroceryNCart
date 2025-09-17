@@ -1,5 +1,5 @@
 import CartProductModel from "../models/cartproduct.model.js";
-import UserModel from "../models/user.model.js";
+import User from "../models/user.model.js";
 
 export const addToCartItemController = async(request,response)=>{
     try {
@@ -32,7 +32,7 @@ export const addToCartItemController = async(request,response)=>{
         })
         const save = await cartItem.save()
 
-        const updateCartUser = await UserModel.updateOne({ _id : userId},{
+        const updateCartUser = await User.updateOne({ _id : userId},{
             $push : { 
                 shopping_cart : productId
             }

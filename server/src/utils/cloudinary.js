@@ -16,18 +16,25 @@ cloudinary.config({
 const extractPublicIdAndType = (url) => {
   if (!url) throw new Error("Invalid URL: Missing");
 
-  const parts = url.split("/");
-  const fileWithExt = parts.pop();
-  const publicId = fileWithExt.split(".")[0];
+  // Match public_id from cloudinary URL
+  // Example: https://res.cloudinary.com/<cloud>/<resource_type>/upload/v123456/folder/file.png
+  const regex = /\/upload\/(?:v\d+\/)?([^\.]+)/;
+  const match = url.match(regex);
 
-  const fileType = fileWithExt.split(".").pop().toLowerCase();
-  const isVideo = ["mp4", "mov", "avi", "mkv"].includes(fileType);
+  if (!match || !match[1]) {
+    throw new Error("Invalid Cloudinary URL: Could not extract public_id");
+  }
 
-  return {
-    publicId,
-    resourceType: isVideo ? "video" : "image",
-  };
+  const publicId = match[1]; // e.g., folder/file
+
+  // Detect resource type from URL (default: image)
+  let resourceType = "image";
+  if (url.includes("/video/")) resourceType = "video";
+  if (url.includes("/raw/")) resourceType = "raw";
+
+  return { publicId, resourceType };
 };
+
 
 // =============================
 // Upload to Cloudinary
@@ -46,7 +53,7 @@ export const uploadOnCloudinary = async (localFilePath, folder = "GroceryNCart")
 
     console.log(`[Cloudinary Upload] ✅ File uploaded to: ${response.secure_url}`);
 
-    // Remove local file safely
+    // Cleanup local file
     try {
       await fs.unlink(localFilePath);
     } catch (cleanupErr) {
@@ -56,14 +63,30 @@ export const uploadOnCloudinary = async (localFilePath, folder = "GroceryNCart")
     return response;
   } catch (error) {
     console.error("[Cloudinary Upload] ❌ Upload failed:", error.message);
+    return null;
+  }
+};
 
-    // Attempt cleanup even on failure
-    try {
-      await fs.unlink(localFilePath);
-    } catch {
-      /* ignore */
-    }
+// =============================
+// Upload (from buffer)
+// =============================
+export const uploadBufferOnCloudinary = async (buffer, folder = "GroceryNCart") => {
+  if (!buffer) {
+    console.warn("[Cloudinary Upload] No buffer provided");
+    return null;
+  }
 
+  try {
+    const base64 = `data:image/png;base64,${buffer.toString("base64")}`;
+    const response = await cloudinary.uploader.upload(base64, {
+      resource_type: "auto",
+      folder,
+    });
+
+    console.log(`[Cloudinary Upload] ✅ Buffer uploaded to: ${response.secure_url}`);
+    return response;
+  } catch (error) {
+    console.error("[Cloudinary Upload] ❌ Buffer upload failed:", error.message);
     return null;
   }
 };

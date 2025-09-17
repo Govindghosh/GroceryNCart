@@ -1,7 +1,7 @@
 import Stripe from "../config/stripe.js";
 import CartProductModel from "../models/cartproduct.model.js";
 import OrderModel from "../models/order.model.js";
-import UserModel from "../models/user.model.js";
+import User from "../models/user.model.js";
 import mongoose from "mongoose";
 
  export async function CashOnDeliveryOrderController(request,response){
@@ -30,7 +30,7 @@ import mongoose from "mongoose";
 
         ///remove from the cart
         const removeCartItems = await CartProductModel.deleteMany({ userId : userId })
-        const updateInUser = await UserModel.updateOne({ _id : userId }, { shopping_cart : []})
+        const updateInUser = await User.updateOne({ _id : userId }, { shopping_cart : []})
 
         return response.json({
             message : "Order successfully",
@@ -59,7 +59,7 @@ export async function paymentController(request,response){
         const userId = request.userId // auth middleware 
         const { list_items, totalAmt, addressId,subTotalAmt } = request.body 
 
-        const user = await UserModel.findById(userId)
+        const user = await User.findById(userId)
 
         const line_items  = list_items.map(item =>{
             return{
@@ -171,7 +171,7 @@ export async function webhookStripe(request,response){
 
         console.log(order)
         if(Boolean(order[0])){
-            const removeCartItems = await  UserModel.findByIdAndUpdate(userId,{
+            const removeCartItems = await  User.findByIdAndUpdate(userId,{
                 shopping_cart : []
             })
             const removeCartProductDB = await CartProductModel.deleteMany({ userId : userId})

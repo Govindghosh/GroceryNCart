@@ -1,5 +1,5 @@
 import AddressModel from "../models/address.model.js";
-import UserModel from "../models/user.model.js"; 
+import User from "../models/user.model.js"; 
 
 export const addAddressController = async(request,response)=>{
     try {
@@ -17,7 +17,7 @@ export const addAddressController = async(request,response)=>{
         })
         const saveAddress = await createAddress.save()
 
-        const addUserAddressId = await UserModel.findByIdAndUpdate(userId,{
+        const addUserAddressId = await User.findByIdAndUpdate(userId,{
             $push : {
                 address_details : saveAddress._id
             }
