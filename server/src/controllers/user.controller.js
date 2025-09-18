@@ -418,36 +418,20 @@ const refreshToken = asyncHandler(async (req, res) => {
 });
 
 //get login user details
-const userDetails = asyncHandler(async (req, res) => {
-  const user = req.user; // populated by auth middleware
+const userDetails = asyncHandler(async(req, res)=>{
+  const userId  = req.user._id
 
-  if (!user) {
-    return res.status(404).json({
-      message: "User not found",
-      error: true,
-      success: false,
-    });
-  }
+        console.log(userId)
 
-  // Return only required fields
-  const userData = {
-    id: user._id,
-    name: user.name,
-    email: user.email,
-    avatar: user.avatar,
-    mobile: user.mobile,
-    role: user.role,
-    status: user.status,
-    address_details: user.address_details,
-  };
+        const user = await User.findById(userId).select('-password -refresh_token')
 
-  return res.json({
-    message: "User details fetched successfully",
-    data: userData,
-    error: false,
-    success: true,
-  });
-});
+        return res.json({
+            message : 'user details',
+            data : user,
+            error : false,
+            success : true
+        })
+})
 
 export {
     loginController,
