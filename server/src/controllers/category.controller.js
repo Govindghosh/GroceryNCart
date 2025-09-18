@@ -60,24 +60,31 @@ const updateCategoryController = asyncHandler(async (req, res) => {
   const updateFields = {};
   if (name) updateFields.name = name;
 
-  // If a new image is uploaded
+  // Handle new image upload
   if (file) {
-    // Delete old image from Cloudinary if it exists
-    if (category.image) {
-      await deleteOnCloudinary(category.image);
-    }
+    try {
+      // Delete old image if exists
+      if (category.image) {
+        const publicId = category.image.split("/").pop().split(".")[0];
+        await deleteOnCloudinary(publicId);
+      }
 
-    const uploadedImage = await uploadOnCloudinary(file.path, "category_images");
-    updateFields.image = uploadedImage.url;
+      // Upload new image to Cloudinary
+      const uploadedImage = await uploadOnCloudinary(file.path, "category_images");
+      updateFields.image = uploadedImage.secure_url;
+    } catch (err) {
+      return res.status(500).json({ success: false, message: "Image upload failed", error: err.message });
+    }
   }
 
+  // Update category in DB
   const updatedCategory = await Category.findByIdAndUpdate(_id, updateFields, { new: true });
 
   return res.json({
     message: "Category updated successfully",
     success: true,
     error: false,
-    data: updatedCategory
+    data: updatedCategory,
   });
 });
 

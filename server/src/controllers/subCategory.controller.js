@@ -56,81 +56,106 @@ const addSubCategoryController = asyncHandler(async (req, res) => {
   });
 });
 
+const getSubCategoryController = asyncHandler(async (req, res) => {
+  const subCategories = await SubCategory.find()
+    .sort({ createdAt: -1 })
+    .populate("category", "name image"); // only return required fields
 
-export const getSubCategoryController = async (request, response) => {
-  try {
-    const data = await SubCategory.find()
-      .sort({ createdAt: -1 })
-      .populate("category");
-    return response.json({
-      message: "Sub Category data",
-      data: data,
-      error: false,
-      success: true,
-    });
-  } catch (error) {
-    return response.status(500).json({
-      message: error.message || error,
-      error: true,
-      success: false,
-    });
+  if (!subCategories || subCategories.length === 0) {
+    throw new ApiError(404, "No subcategories found");
   }
-};
 
-export const updateSubCategoryController = async (request, response) => {
-  try {
-    const { _id, name, image, category } = request.body;
+  return res.json({
+    message: "Subcategories fetched successfully",
+    data: subCategories,
+    success: true,
+    error: false,
+  });
+});
 
-    const checkSub = await SubCategory.findById(_id);
+const updateSubCategoryController = asyncHandler(async (req, res) => {
+  const { _id, name, category } = req.body;
+  const file = req.file;
 
-    if (!checkSub) {
-      return response.status(400).json({
-        message: "Check your _id",
-        error: true,
-        success: false,
-      });
+  if (!_id) throw new ApiError(400, "Subcategory ID is required");
+
+  // Fetch existing subcategory
+  const subCategory = await SubCategory.findById(_id);
+  if (!subCategory) throw new ApiError(404, "Subcategory not found");
+
+  const updateFields = {};
+  if (name) updateFields.name = name;
+
+  // Handle category (ensure it's always array of ObjectIds)
+  if (category) {
+    try {
+      if (typeof category === "string") {
+        updateFields.category = JSON.parse(category);
+      } else if (Array.isArray(category)) {
+        updateFields.category = category;
+      } else {
+        throw new Error("Invalid category format");
+      }
+    } catch (err) {
+      throw new ApiError(
+        400,
+        "Invalid category format. Must be array of ObjectIds"
+      );
+    }
+  }
+
+  // If a new image is uploaded
+  if (file) {
+    // Delete old image from Cloudinary if it exists
+    if (subCategory.image) {
+      await deleteOnCloudinary(subCategory.image);
     }
 
-    const updateSubCategory = await SubCategory.findByIdAndUpdate(_id, {
-      name,
-      image,
-      category,
-    });
-
-    return response.json({
-      message: "Updated Successfully",
-      data: updateSubCategory,
-      error: false,
-      success: true,
-    });
-  } catch (error) {
-    return response.status(500).json({
-      message: error.message || error,
-      error: true,
-      success: false,
-    });
+    const uploadedImage = await uploadOnCloudinary(file.path, "subcategories");
+    updateFields.image = uploadedImage.url;
   }
-};
 
-export const deleteSubCategoryController = async (request, response) => {
-  try {
-    const { _id } = request.body;
-    console.log("Id", _id);
-    const deleteSub = await SubCategory.findByIdAndDelete(_id);
+  const updatedSubCategory = await SubCategory.findByIdAndUpdate(
+    _id,
+    updateFields,
+    { new: true }
+  ).populate("category", "name image");
 
-    return response.json({
-      message: "Delete successfully",
-      data: deleteSub,
-      error: false,
-      success: true,
-    });
-  } catch (error) {
-    return response.status(500).json({
-      message: error.message || error,
-      error: true,
-      success: false,
-    });
+  return res.json({
+    message: "Subcategory updated successfully",
+    success: true,
+    error: false,
+    data: updatedSubCategory,
+  });
+});
+
+const deleteSubCategoryController = asyncHandler(async (req, res) => {
+  const { _id } = req.body;
+
+  if (!_id) throw new ApiError(400, "Subcategory ID is required");
+
+  const subCategory = await SubCategory.findById(_id);
+  if (!subCategory) throw new ApiError(404, "Subcategory not found");
+
+  // Delete image from Cloudinary if exists
+  if (subCategory.image) {
+    await deleteOnCloudinary(subCategory.image);
   }
-};
 
-export { addSubCategoryController };
+  // Delete subcategory from DB
+  await SubCategory.findByIdAndDelete(_id);
+
+  return res.json({
+    message: "Subcategory deleted successfully",
+    data: subCategory,
+    error: false,
+    success: true,
+  });
+});
+
+export {
+  addSubCategoryController,
+  getSubCategoryController,
+  updateSubCategoryController,
+  deleteSubCategoryController
+};

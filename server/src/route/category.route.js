@@ -17,12 +17,14 @@ categoryRouter.post(
   addCategoryController
 );
 categoryRouter.get("/get", getCategoryController);
+
 categoryRouter.put(
   "/update",
-  upload.single("image"),
   auth,
+  upload.single("image"),
   updateCategoryController
 );
+
 categoryRouter.delete("/delete", auth, deleteCategoryController);
 
 export default categoryRouter;

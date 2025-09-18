@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { IoClose } from "react-icons/io5";
-import uploadImage from "../utils/UploadImage";
 import Axios from "../utils/Axios";
 import SummaryApi from "../common/SummaryApi";
 import toast from "react-hot-toast";
@@ -16,38 +15,38 @@ const EditCategory = ({ close, fetchData, data: CategoryData }) => {
 
   const handleOnChange = (e) => {
     const { name, value } = e.target;
-
-    setData((preve) => {
-      return {
-        ...preve,
-        [name]: value,
-      };
-    });
+    setData((prev) => ({ ...prev, [name]: value }));
   };
+
+  const handleUploadCategoryImage = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setData((prev) => ({ ...prev, image: file }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!data.name) {
-      toast.error("Name is required");
-      return;
-    }
+    if (!data.name || !data.image) return;
 
     try {
       setLoading(true);
+
       const formData = new FormData();
       formData.append("_id", data._id);
       formData.append("name", data.name);
 
-      // Append file only if a new image is selected
-      if (data.imageFile) {
-        formData.append("image", data.imageFile);
-      }
+      if (data.image instanceof File) formData.append("image", data.image);
 
-      const response = await Axios.put("/api/category/update", formData, {
+      const response = await Axios({
+        ...SummaryApi.updateCategory,
+        data: formData,
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      if (response.data.success) {
-        toast.success(response.data.message);
+      const { data: responseData } = response;
+
+      if (responseData.success) {
+        toast.success(responseData.message);
         close();
         fetchData();
       }
@@ -58,97 +57,73 @@ const EditCategory = ({ close, fetchData, data: CategoryData }) => {
     }
   };
 
-  const handleUploadCategoryImage = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setData((prev) => ({
-      ...prev,
-      imageFile: file, // save file to send later
-      image: URL.createObjectURL(file), // preview
-    }));
-  };
-
   return (
-    <section className="fixed top-0 bottom-0 left-0 right-0 p-4 bg-neutral-800 bg-opacity-60 flex items-center justify-center">
-      <div className="bg-white max-w-4xl w-full p-4 rounded">
-        <div className="flex items-center justify-between">
-          <h1 className="font-semibold">Update Category</h1>
-          <button onClick={close} className="w-fit block ml-auto">
-            <IoClose size={25} />
+    <section className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+      <div className="bg-white max-w-2xl w-full rounded-xl shadow-lg p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-semibold">Update Category</h1>
+          <button onClick={close} className="text-gray-600 hover:text-gray-900">
+            <IoClose size={28} />
           </button>
         </div>
-        <form className="my-3 grid gap-2" onSubmit={handleSubmit}>
+
+        <form className="grid gap-4" onSubmit={handleSubmit}>
+          {/* Name */}
           <div className="grid gap-1">
-            <label id="categoryName">Name</label>
+            <label className="font-medium">Name</label>
             <input
               type="text"
-              id="categoryName"
-              placeholder="Enter category name"
-              value={data.name}
               name="name"
+              value={data.name}
               onChange={handleOnChange}
-              className="bg-blue-50 p-2 border border-blue-100 focus-within:border-primary-200 outline-none rounded"
-              disabled={loading} // disable input while loading
+              placeholder="Enter category name"
+              className="p-3 border border-gray-300 rounded-lg bg-blue-50 focus:outline-none focus:ring-2 focus:ring-primary-200"
             />
           </div>
 
+          {/* Image Upload */}
           <div className="grid gap-1">
-            <p>Image</p>
-            <div className="flex gap-4 flex-col lg:flex-row items-center">
-              <div className="border bg-blue-50 h-36 w-full lg:w-36 flex items-center justify-center rounded">
+            <label className="font-medium">Image</label>
+            <div className="flex flex-col lg:flex-row gap-4 items-center">
+              <div className="border border-gray-200 h-36 w-full lg:w-36 bg-blue-50 rounded-lg flex items-center justify-center overflow-hidden">
                 {data.image ? (
                   <img
+                    src={data.image instanceof File ? URL.createObjectURL(data.image) : data.image}
                     alt="category"
-                    src={data.image}
-                    className="w-full h-full object-scale-down"
+                    className="w-full h-full object-contain"
                   />
                 ) : (
-                  <p className="text-sm text-neutral-500">No Image</p>
+                  <p className="text-gray-400 text-sm">No Image</p>
                 )}
               </div>
 
-              <label htmlFor="uploadCategoryImage">
-                <div
-                  className={`${
-                    !data.name
-                      ? "bg-gray-300"
-                      : "border-primary-200 hover:bg-primary-100"
-                  } px-4 py-2 rounded cursor-pointer border font-medium flex items-center justify-center`}
-                >
-                  {loading ? (
-                    <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></span>
-                  ) : null}
-                  {loading ? "Uploading..." : "Upload Image"}
-                </div>
-                <input
-                  disabled={!data.name || loading} // disable file input while loading
-                  onChange={handleUploadCategoryImage}
-                  type="file"
-                  id="uploadCategoryImage"
-                  className="hidden"
-                />
+              <label
+                htmlFor="uploadCategoryImage"
+                className="px-5 py-2 bg-primary-200 text-white rounded-lg font-medium hover:bg-primary-300 cursor-pointer transition"
+              >
+                {loading ? "Loading..." : "Upload Image"}
               </label>
+              <input
+                type="file"
+                id="uploadCategoryImage"
+                className="hidden"
+                onChange={handleUploadCategoryImage}
+              />
             </div>
           </div>
 
+          {/* Submit Button */}
           <button
             type="submit"
-            disabled={loading || !data.name} // disable submit while loading
-            className={`${
-              data.name && !loading
-                ? "bg-primary-200 hover:bg-primary-100"
-                : "bg-gray-300"
-            } py-2 font-semibold flex items-center justify-center gap-2`}
+            disabled={!data.name || !data.image || loading}
+            className={`w-full py-3 rounded-lg font-semibold text-white transition ${
+              data.name && data.image
+                ? "bg-primary-200 hover:bg-primary-300"
+                : "bg-gray-300 cursor-not-allowed"
+            }`}
           >
-            {loading ? (
-              <>
-                <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
-                Updating...
-              </>
-            ) : (
-              "Update Category"
-            )}
+            {loading ? "Updating..." : "Update Category"}
           </button>
         </form>
       </div>
