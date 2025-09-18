@@ -1,6 +1,7 @@
 import sendEmail from '../config/sendEmail.js'
 import User from '../models/user.model.js'
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { ApiError } from "../utils/ApiError.js";
 import verifyEmailTemplate from '../utils/verifyEmailTemplate.js'
 import {uploadOnCloudinary, deleteOnCloudinary, uploadBufferOnCloudinary} from '../utils/cloudinary.js'
 import generatedOtp from '../utils/generatedOtp.js'
@@ -178,306 +179,286 @@ const uploadAvatar = asyncHandler(async (req, res) => {
 });
 
 //update user details
-export async function updateUserDetails(request,response){
-    try {
-        const userId = request.userId //auth middleware
-        const { name, email, mobile, password } = request.body 
+const updateUserDetails = asyncHandler(async (req, res) => {
+  const userId = req.user._id; // from auth middleware
+  const { name, email, mobile, password } = req.body;
 
-        let hashPassword = ""
+  if (!userId) throw new ApiError(401, "Unauthorized request");
 
-        if(password){
-            const salt = await bcryptjs.genSalt(10)
-            hashPassword = await bcryptjs.hash(password,salt)
-        }
+  const user = await User.findById(userId);
+  if (!user) throw new ApiError(404, "User not found");
 
-        const updateUser = await User.updateOne({ _id : userId},{
-            ...(name && { name : name }),
-            ...(email && { email : email }),
-            ...(mobile && { mobile : mobile }),
-            ...(password && { password : hashPassword })
-        })
+  // Check for email conflict if email is being changed
+  if (email && email !== user.email) {
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) throw new ApiError(400, "Email already in use");
+    user.email = email;
+  }
 
-        return response.json({
-            message : "Updated successfully",
-            error : false,
-            success : true,
-            data : updateUser
-        })
+  if (name) user.name = name;
+  if (mobile) user.mobile = mobile;
 
+  // password hashing will be handled by pre-save hook
+  if (password) user.password = password;
 
-    } catch (error) {
-        return response.status(500).json({
-            message : error.message || error,
-            error : true,
-            success : false
-        })
-    }
-}
+  const updatedUser = await user.save({ validateBeforeSave: true });
+
+  return res.status(200).json({
+    message: "User updated successfully",
+    success: true,
+    error: false,
+    data: {
+      id: updatedUser._id,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      mobile: updatedUser.mobile,
+      role: updatedUser.role,
+      status: updatedUser.status,
+    },
+  });
+});
 
 //forgot password not login
-export async function forgotPasswordController(request,response) {
-    try {
-        const { email } = request.body 
+const forgotPasswordController = asyncHandler(async (req, res) => {
+  const { email } = req.body;
 
-        const user = await User.findOne({ email })
+  const user = await User.findOne({ email });
+  if (!user) {
+    return res.status(400).json({
+      message: "Email not registered",
+      error: true,
+      success: false,
+    });
+  }
 
-        if(!user){
-            return response.status(400).json({
-                message : "Email not available",
-                error : true,
-                success : false
-            })
-        }
+  // Generate OTP + expiry (1 hour from now)
+  const otp = generatedOtp();
+  const expireTime = new Date(Date.now() + 60 * 60 * 1000);
 
-        const otp = generatedOtp()
-        const expireTime = new Date() + 60 * 60 * 1000 // 1hr
+  await User.findByIdAndUpdate(user._id, {
+    forgot_password_otp: otp,
+    forgot_password_expiry: expireTime,
+  });
 
-        const update = await User.findByIdAndUpdate(user._id,{
-            forgot_password_otp : otp,
-            forgot_password_expiry : new Date(expireTime).toISOString()
-        })
+  // Send email
+  await sendEmail({
+    sendTo: email,
+    subject: "Forgot Password - GroceryNCart",
+    html: forgotPasswordTemplate({
+      name: user.name,
+      otp,
+    }),
+  });
 
-        await sendEmail({
-            sendTo : email,
-            subject : "Forgot password from GroceryNCart",
-            html : forgotPasswordTemplate({
-                name : user.name,
-                otp : otp
-            })
-        })
-
-        return response.json({
-            message : "check your email",
-            error : false,
-            success : true
-        })
-
-    } catch (error) {
-        return response.status(500).json({
-            message : error.message || error,
-            error : true,
-            success : false
-        })
-    }
-}
+  return res.json({
+    message: "OTP sent to your email. Valid for 1 hour.",
+    error: false,
+    success: true,
+  });
+});
 
 //verify forgot password otp
-export async function verifyForgotPasswordOtp(request,response){
-    try {
-        const { email , otp }  = request.body
-
-        if(!email || !otp){
-            return response.status(400).json({
-                message : "Provide required field email, otp.",
-                error : true,
-                success : false
-            })
-        }
-
-        const user = await User.findOne({ email })
-
-        if(!user){
-            return response.status(400).json({
-                message : "Email not available",
-                error : true,
-                success : false
-            })
-        }
-
-        const currentTime = new Date().toISOString()
-
-        if(user.forgot_password_expiry < currentTime  ){
-            return response.status(400).json({
-                message : "Otp is expired",
-                error : true,
-                success : false
-            })
-        }
-
-        if(otp !== user.forgot_password_otp){
-            return response.status(400).json({
-                message : "Invalid otp",
-                error : true,
-                success : false
-            })
-        }
-
-        //if otp is not expired
-        //otp === user.forgot_password_otp
-
-        const updateUser = await User.findByIdAndUpdate(user?._id,{
-            forgot_password_otp : "",
-            forgot_password_expiry : ""
-        })
-        
-        return response.json({
-            message : "Verify otp successfully",
-            error : false,
-            success : true
-        })
-
-    } catch (error) {
-        return response.status(500).json({
-            message : error.message || error,
-            error : true,
-            success : false
-        })
-    }
-}
-
-//reset the password
-export async function resetpassword(request,response){
-    try {
-        const { email , newPassword, confirmPassword } = request.body 
-
-        if(!email || !newPassword || !confirmPassword){
-            return response.status(400).json({
-                message : "provide required fields email, newPassword, confirmPassword"
-            })
-        }
-
-        const user = await User.findOne({ email })
-
-        if(!user){
-            return response.status(400).json({
-                message : "Email is not available",
-                error : true,
-                success : false
-            })
-        }
-
-        if(newPassword !== confirmPassword){
-            return response.status(400).json({
-                message : "newPassword and confirmPassword must be same.",
-                error : true,
-                success : false,
-            })
-        }
-
-        const salt = await bcryptjs.genSalt(10)
-        const hashPassword = await bcryptjs.hash(newPassword,salt)
-
-        const update = await User.findOneAndUpdate(user._id,{
-            password : hashPassword
-        })
-
-        return response.json({
-            message : "Password updated successfully.",
-            error : false,
-            success : true
-        })
-
-    } catch (error) {
-        return response.status(500).json({
-            message : error.message || error,
-            error : true,
-            success : false
-        })
-    }
-}
-
-
-//refresh token controller
-export async function refreshToken(request,response){
-    try {
-        const refreshToken = request.cookies.refreshToken || request?.headers?.authorization?.split(" ")[1]  /// [ Bearer token]
-
-        if(!refreshToken){
-            return response.status(401).json({
-                message : "Invalid token",
-                error  : true,
-                success : false
-            })
-        }
-
-        const verifyToken = await jwt.verify(refreshToken,process.env.REFRESH_TOKEN_SECRET)
-
-        if(!verifyToken){
-            return response.status(401).json({
-                message : "token is expired",
-                error : true,
-                success : false
-            })
-        }
-
-        const userId = verifyToken?._id
-
-        const newAccessToken = await generatedAccessToken(userId)
-
-        const cookiesOption = {
-            httpOnly : true,
-            secure : true,
-            sameSite : "None"
-        }
-
-        response.cookie('accessToken',newAccessToken,cookiesOption)
-
-        return response.json({
-            message : "New Access token generated",
-            error : false,
-            success : true,
-            data : {
-                accessToken : newAccessToken
-            }
-        })
-
-
-    } catch (error) {
-        return response.status(500).json({
-            message : error.message || error,
-            error : true,
-            success : false
-        })
-    }
-}
-
-//get login user details
-export async function userDetails(req, res) {
+const verifyForgotPasswordOtp = asyncHandler(async (req, res) => {
   try {
-    // auth middleware sets req.user
-    const user = req.user; // already populated by auth middleware
+    const { email, otp } = req.body;
 
-    if (!user) {
-      return res.status(404).json({
-        message: "User not found",
+    if (!email || !otp) {
+      return res.status(400).json({
+        message: "Provide required fields: email and otp.",
         error: true,
         success: false,
       });
     }
 
-    // Optionally select only needed fields
-    const userData = {
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar,
-      mobile: user.mobile,
-      role: user.role,
-      status: user.status,
-      address_details: user.address_details,
-    };
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({
+        message: "Email not registered",
+        error: true,
+        success: false,
+      });
+    }
+
+    // Compare expiry properly
+    const currentTime = new Date();
+    if (!user.forgot_password_expiry || user.forgot_password_expiry < currentTime) {
+      return res.status(400).json({
+        message: "OTP is expired",
+        error: true,
+        success: false,
+      });
+    }
+
+    // Check OTP (cast to string for safety)
+    if (String(otp) !== String(user.forgot_password_otp)) {
+      return res.status(400).json({
+        message: "Invalid OTP",
+        error: true,
+        success: false,
+      });
+    }
+
+    // OTP is valid → clear OTP & expiry
+    await User.findByIdAndUpdate(user._id, {
+      forgot_password_otp: null,
+      forgot_password_expiry: null,
+    });
 
     return res.json({
-      message: "User details",
-      data: userData,
+      message: "OTP verified successfully",
       error: false,
       success: true,
+      data: { userId: user._id }, // 👈 useful for reset password step
     });
   } catch (error) {
     return res.status(500).json({
-      message: "Something went wrong",
+      message: error.message || "Something went wrong",
       error: true,
       success: false,
     });
   }
-}
+});
 
+//reset the password
+const resetPassword = asyncHandler(async (req, res) => {
+  const { email, newPassword, confirmPassword } = req.body;
 
+  if (!email || !newPassword || !confirmPassword) {
+    return res.status(400).json({
+      message: "provide required fields email, newPassword, confirmPassword",
+      error: true,
+      success: false,
+    });
+  }
+
+  const user = await User.findOne({ email });
+
+  if (!user) {
+    return res.status(400).json({
+      message: "Email is not available",
+      error: true,
+      success: false,
+    });
+  }
+
+  if (newPassword !== confirmPassword) {
+    return res.status(400).json({
+      message: "newPassword and confirmPassword must be same.",
+      error: true,
+      success: false,
+    });
+  }
+
+  // ✅ assign directly, pre-save hook will hash
+  user.password = newPassword;
+  user.forgot_password_otp = null;
+  user.forgot_password_expiry = null;
+  user.refreshToken = ""; // logout all devices
+
+  await user.save();
+
+  return res.json({
+    message: "Password updated successfully. Please login again.",
+    error: false,
+    success: true,
+  });
+});
+
+//refresh token controller
+const refreshToken = asyncHandler(async (req, res) => {
+  const refreshToken =
+    req.cookies?.refreshToken ||
+    req.headers?.authorization?.split(" ")[1]; // Bearer token
+
+  if (!refreshToken) {
+    return res.status(401).json({
+      message: "Invalid token",
+      error: true,
+      success: false,
+    });
+  }
+
+  let decoded;
+  try {
+    decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+  } catch (err) {
+    return res.status(401).json({
+      message: "Token is expired or invalid",
+      error: true,
+      success: false,
+    });
+  }
+
+  const user = await User.findById(decoded._id);
+  if (!user || user.refreshToken !== refreshToken) {
+    return res.status(401).json({
+      message: "Invalid token or user not found",
+      error: true,
+      success: false,
+    });
+  }
+
+  // Generate new tokens (rotates refresh token)
+  const { accessToken, refreshToken: newRefreshToken } =
+    await generateAccessAndRefreshTokens(user._id);
+
+  // Set cookies
+  res.cookie("accessToken", accessToken, cookieOptions);
+  res.cookie("refreshToken", newRefreshToken, cookieOptions);
+
+  return res.json({
+    message: "New access and refresh tokens generated",
+    error: false,
+    success: true,
+    data: {
+      accessToken,
+      refreshToken: newRefreshToken,
+    },
+  });
+});
+
+//get login user details
+const userDetails = asyncHandler(async (req, res) => {
+  const user = req.user; // populated by auth middleware
+
+  if (!user) {
+    return res.status(404).json({
+      message: "User not found",
+      error: true,
+      success: false,
+    });
+  }
+
+  // Return only required fields
+  const userData = {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    avatar: user.avatar,
+    mobile: user.mobile,
+    role: user.role,
+    status: user.status,
+    address_details: user.address_details,
+  };
+
+  return res.json({
+    message: "User details fetched successfully",
+    data: userData,
+    error: false,
+    success: true,
+  });
+});
 
 export {
     loginController,
     logoutController,
     registerUserController,
     verifyEmailController,
-    uploadAvatar
+    uploadAvatar,
+    updateUserDetails,
+    forgotPasswordController,
+    verifyForgotPasswordOtp,
+    resetPassword,
+    refreshToken,
+    userDetails
 }
