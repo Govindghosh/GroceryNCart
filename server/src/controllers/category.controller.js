@@ -1,133 +1,122 @@
-import CategoryModel from "../models/category.model.js";
-import SubCategoryModel from "../models/subCategory.model.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { ApiError } from "../utils/ApiError.js";
+import Category from "../models/category.model.js";
+import SubCategory from "../models/subCategory.model.js";
 import ProductModel from "../models/product.model.js";
+import {uploadOnCloudinary, deleteOnCloudinary, uploadBufferOnCloudinary} from '../utils/cloudinary.js';
 
-export const AddCategoryController = async(request,response)=>{
-    try {
-        const { name , image } = request.body 
+const addCategoryController = asyncHandler(async (req, res) => {
+  const { name } = req.body;
+  const file = req.file;
 
-        if(!name || !image){
-            return response.status(400).json({
-                message : "Enter required fields",
-                error : true,
-                success : false
-            })
-        }
+  if (!name || !file) {
+    throw new ApiError(400, "Enter required fields");
+  }
 
-        const addCategory = new CategoryModel({
-            name,
-            image
-        })
+  // Upload the file to Cloudinary (or wherever you store it)
+  const uploadedImage = await uploadOnCloudinary(file.path, "category_images");
+  console.log("uploadedImage", uploadedImage.url);
 
-        const saveCategory = await addCategory.save()
+  const category = new Category({
+    name,
+    image: uploadedImage.url, // save Cloudinary URL
+  });
 
-        if(!saveCategory){
-            return response.status(500).json({
-                message : "Not Created",
-                error : true,
-                success : false
-            })
-        }
+  const savedCategory = await category.save();
 
-        return response.json({
-            message : "Add Category",
-            data : saveCategory,
-            success : true,
-            error : false
-        })
+  if (!savedCategory) {
+    throw new ApiError(500, "Category not created");
+  }
 
-    } catch (error) {
-        return response.status(500).json({
-            message : error.message || error,
-            error : true,
-            success : false
-        })
+  return res.json({
+    message: "Category added successfully",
+    data: savedCategory,
+    success: true,
+    error: false,
+  });
+});
+
+const getCategoryController = asyncHandler(async (req, res) => {
+  const categories = await Category.find().sort({ createdAt: -1 });
+
+  return res.json({
+    message: "Categories fetched successfully",
+    data: categories,
+    success: true,
+    error: false,
+  });
+});
+
+const updateCategoryController = asyncHandler(async (req, res) => {
+  const { _id, name } = req.body;
+  const file = req.file;
+
+  if (!_id) throw new ApiError(400, "Category ID is required");
+
+  // Fetch existing category
+  const category = await Category.findById(_id);
+  if (!category) throw new ApiError(404, "Category not found");
+
+  const updateFields = {};
+  if (name) updateFields.name = name;
+
+  // If a new image is uploaded
+  if (file) {
+    // Delete old image from Cloudinary if it exists
+    if (category.image) {
+      await deleteOnCloudinary(category.image);
     }
-}
 
-export const getCategoryController = async(request,response)=>{
-    try {
-        
-        const data = await CategoryModel.find().sort({ createdAt : -1 })
+    const uploadedImage = await uploadOnCloudinary(file.path, "category_images");
+    updateFields.image = uploadedImage.url;
+  }
 
-        return response.json({
-            data : data,
-            error : false,
-            success : true
-        })
-    } catch (error) {
-        return response.status(500).json({
-            message : error.messsage || error,
-            error : true,
-            success : false
-        })
-    }
-}
+  const updatedCategory = await Category.findByIdAndUpdate(_id, updateFields, { new: true });
 
-export const updateCategoryController = async(request,response)=>{
-    try {
-        const { _id ,name, image } = request.body 
+  return res.json({
+    message: "Category updated successfully",
+    success: true,
+    error: false,
+    data: updatedCategory
+  });
+});
 
-        const update = await CategoryModel.updateOne({
-            _id : _id
-        },{
-           name, 
-           image 
-        })
+const deleteCategoryController = asyncHandler(async (req, res) => {
+  const { _id } = req.body;
 
-        return response.json({
-            message : "Updated Category",
-            success : true,
-            error : false,
-            data : update
-        })
-    } catch (error) {
-        return response.status(500).json({
-            message : error.message || error,
-            error : true,
-            success : false
-        })
-    }
-}
+  if (!_id) throw new ApiError(400, "Category ID is required");
 
-export const deleteCategoryController = async(request,response)=>{
-    try {
-        const { _id } = request.body 
+  // Find the category first
+  const category = await Category.findById(_id);
+  if (!category) throw new ApiError(404, "Category not found");
 
-        const checkSubCategory = await SubCategoryModel.find({
-            category : {
-                "$in" : [ _id ]
-            }
-        }).countDocuments()
+  // Check if category is in use
+  const checkSubCategory = await SubCategory.countDocuments({ category: _id });
+  const checkProduct = await ProductModel.countDocuments({ category: _id });
 
-        const checkProduct = await ProductModel.find({
-            category : {
-                "$in" : [ _id ]
-            }
-        }).countDocuments()
+  if (checkSubCategory > 0 || checkProduct > 0) {
+    throw new ApiError(400, "Category is already in use, cannot delete");
+  }
 
-        if(checkSubCategory >  0 || checkProduct > 0 ){
-            return response.status(400).json({
-                message : "Category is already use can't delete",
-                error : true,
-                success : false
-            })
-        }
+  // Delete image from Cloudinary if it exists
+  if (category.image) {
+    await deleteOnCloudinary(category.image);
+  }
 
-        const deleteCategory = await CategoryModel.deleteOne({ _id : _id})
+  // Delete the category from DB
+  await Category.deleteOne({ _id });
 
-        return response.json({
-            message : "Delete category successfully",
-            data : deleteCategory,
-            error : false,
-            success : true
-        })
+  return res.json({
+    message: "Category deleted successfully",
+    success: true,
+    error: false,
+  });
+});
 
-    } catch (error) {
-       return response.status(500).json({
-            message : error.message || error,
-            success : false,
-            error : true
-       }) 
-    }
+export {
+    addCategoryController,
+    getCategoryController,
+    updateCategoryController,
+    deleteCategoryController
+
 }

@@ -1,4 +1,4 @@
-import SubCategoryModel from "../models/subCategory.model.js";
+import SubCategory from "../models/subCategory.model.js";
 
 export const AddSubCategoryController = async(request,response)=>{
     try {
@@ -18,7 +18,7 @@ export const AddSubCategoryController = async(request,response)=>{
             category
         }
 
-        const createSubCategory = new SubCategoryModel(payload)
+        const createSubCategory = new SubCategory(payload)
         const save = await createSubCategory.save()
 
         return response.json({
@@ -39,7 +39,7 @@ export const AddSubCategoryController = async(request,response)=>{
 
 export const getSubCategoryController = async(request,response)=>{
     try {
-        const data = await SubCategoryModel.find().sort({createdAt : -1}).populate('category')
+        const data = await SubCategory.find().sort({createdAt : -1}).populate('category')
         return response.json({
             message : "Sub Category data",
             data : data,
@@ -59,7 +59,7 @@ export const updateSubCategoryController = async(request,response)=>{
     try {
         const { _id, name, image,category } = request.body 
 
-        const checkSub = await SubCategoryModel.findById(_id)
+        const checkSub = await SubCategory.findById(_id)
 
         if(!checkSub){
             return response.status(400).json({
@@ -69,7 +69,7 @@ export const updateSubCategoryController = async(request,response)=>{
             })
         }
 
-        const updateSubCategory = await SubCategoryModel.findByIdAndUpdate(_id,{
+        const updateSubCategory = await SubCategory.findByIdAndUpdate(_id,{
             name,
             image,
             category
@@ -95,7 +95,7 @@ export const deleteSubCategoryController = async(request,response)=>{
     try {
         const { _id } = request.body 
         console.log("Id",_id)
-        const deleteSub = await SubCategoryModel.findByIdAndDelete(_id)
+        const deleteSub = await SubCategory.findByIdAndDelete(_id)
 
         return response.json({
             message : "Delete successfully",

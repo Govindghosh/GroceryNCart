@@ -2,11 +2,11 @@ import sendEmail from '../config/sendEmail.js'
 import User from '../models/user.model.js'
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
-import verifyEmailTemplate from '../utils/verifyEmailTemplate.js'
-import {uploadOnCloudinary, deleteOnCloudinary, uploadBufferOnCloudinary} from '../utils/cloudinary.js'
-import generatedOtp from '../utils/generatedOtp.js'
-import forgotPasswordTemplate from '../utils/forgotPasswordTemplate.js'
-import jwt from 'jsonwebtoken'
+import verifyEmailTemplate from '../utils/verifyEmailTemplate.js';
+import {uploadOnCloudinary, deleteOnCloudinary, uploadBufferOnCloudinary} from '../utils/cloudinary.js';
+import generatedOtp from '../utils/generatedOtp.js';
+import forgotPasswordTemplate from '../utils/forgotPasswordTemplate.js';
+import jwt from 'jsonwebtoken';
 
 
 const generateAccessAndRefreshTokens = async (userId) => {
