@@ -138,7 +138,6 @@ const logoutController = asyncHandler(async (req, res) => {
   });
 });
 
-
 // upload user avatar
 const uploadAvatar = asyncHandler(async (req, res) => {
   const userId = req.user._id;
