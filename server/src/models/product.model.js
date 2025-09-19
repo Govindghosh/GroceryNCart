@@ -61,6 +61,8 @@ productSchema.index({
     description : 5
 })
 
+// Create text index
+productSchema.index({ name: "text", description: "text" });
 
 const ProductModel = mongoose.model('product',productSchema)
 

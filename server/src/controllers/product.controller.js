@@ -1,311 +1,321 @@
 import ProductModel from "../models/product.model.js";
+import {
+  uploadOnCloudinary,
+  deleteOnCloudinary,
+  uploadBufferOnCloudinary,
+} from "../utils/cloudinary.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { ApiError } from "../utils/ApiError.js";
 
-export const createProductController = async(request,response)=>{
-    try {
-        const { 
-            name ,
-            image ,
-            category,
-            subCategory,
-            unit,
-            stock,
-            price,
-            discount,
-            description,
-            more_details,
-        } = request.body 
+const createProductController = asyncHandler(async (req, res) => {
+  const {
+    name,
+    category,
+    subCategory,
+    unit,
+    stock,
+    price,
+    discount,
+    description,
+    more_details,
+  } = req.body;
 
-        if(!name || !image[0] || !category[0] || !subCategory[0] || !unit || !price || !description ){
-            return response.status(400).json({
-                message : "Enter required fields",
-                error : true,
-                success : false
-            })
-        }
+  // Validate required fields
+  if (
+    !name ||
+    !req.files?.length ||
+    !category ||
+    !subCategory ||
+    !unit ||
+    !price ||
+    !description
+  ) {
+    return res.status(400).json({
+      message: "Enter required fields",
+      error: true,
+      success: false,
+    });
+  }
 
-        const product = new ProductModel({
-            name ,
-            image ,
-            category,
-            subCategory,
-            unit,
-            stock,
-            price,
-            discount,
-            description,
-            more_details,
-        })
-        const saveProduct = await product.save()
+  // Upload images to Cloudinary
+  const uploadedImages = [];
+  for (const file of req.files) {
+    const result = await uploadOnCloudinary(file.path, "products"); // second param is folder name in Cloudinary
+    uploadedImages.push(result.secure_url);
+  }
 
-        return response.json({
-            message : "Product Created Successfully",
-            data : saveProduct,
-            error : false,
-            success : true
-        })
+  const product = new ProductModel({
+    name,
+    image: uploadedImages,
+    category,
+    subCategory,
+    unit,
+    stock,
+    price,
+    discount,
+    description,
+    more_details,
+  });
 
-    } catch (error) {
-        return response.status(500).json({
-            message : error.message || error,
-            error : true,
-            success : false
-        })
-    }
-}
+  const saveProduct = await product.save();
 
-export const getProductController = async(request,response)=>{
-    try {
-        
-        let { page, limit, search } = request.body 
+  return res.status(201).json({
+    message: "Product Created Successfully",
+    data: saveProduct,
+    error: false,
+    success: true,
+  });
+});
 
-        if(!page){
-            page = 1
-        }
+const getProductController = asyncHandler(async (req, res) => {
+  let { page, limit, search } = req.body;
 
-        if(!limit){
-            limit = 10
-        }
+  page = Number(page) || 1;
+  limit = Number(limit) || 10;
 
-        const query = search ? {
-            $text : {
-                $search : search
-            }
-        } : {}
+  const query = search
+    ? {
+        $text: {
+          $search: search,
+        },
+      }
+    : {};
 
-        const skip = (page - 1) * limit
+  const skip = (page - 1) * limit;
 
-        const [data,totalCount] = await Promise.all([
-            ProductModel.find(query).sort({createdAt : -1 }).skip(skip).limit(limit).populate('category subCategory'),
-            ProductModel.countDocuments(query)
-        ])
+  const [data, totalCount] = await Promise.all([
+    ProductModel.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("category subCategory"),
+    ProductModel.countDocuments(query),
+  ]);
 
-        return response.json({
-            message : "Product data",
-            error : false,
-            success : true,
-            totalCount : totalCount,
-            totalNoPage : Math.ceil( totalCount / limit),
-            data : data
-        })
-    } catch (error) {
-        return response.status(500).json({
-            message : error.message || error,
-            error : true,
-            success : false
-        })
-    }
-}
+  return res.json({
+    message: "Product data",
+    error: false,
+    success: true,
+    totalCount,
+    totalNoPage: Math.ceil(totalCount / limit),
+    data,
+  });
+});
 
-export const getProductByCategory = async(request,response)=>{
-    try {
-        const { id } = request.body 
+const getProductByCategory = asyncHandler(async (req, res) => {
+  const { id } = req.body;
 
-        if(!id){
-            return response.status(400).json({
-                message : "provide category id",
-                error : true,
-                success : false
-            })
-        }
+  if (!id) {
+    return res.status(400).json({
+      message: "Provide category id",
+      error: true,
+      success: false,
+    });
+  }
 
-        const product = await ProductModel.find({ 
-            category : { $in : id }
-        }).limit(15)
+  // Ensure id is always an array for $in
+  const categoryIds = Array.isArray(id) ? id : [id];
 
-        return response.json({
-            message : "category product list",
-            data : product,
-            error : false,
-            success : true
-        })
-    } catch (error) {
-        return response.status(500).json({
-            message : error.message || error,
-            error : true,
-            success : false
-        })
-    }
-}
+  const products = await ProductModel.find({
+    category: { $in: categoryIds },
+  })
+    .limit(15)
+    .populate("category subCategory");
 
-export const getProductByCategoryAndSubCategory  = async(request,response)=>{
-    try {
-        const { categoryId,subCategoryId,page,limit } = request.body
+  return res.json({
+    message: "Category product list",
+    data: products,
+    error: false,
+    success: true,
+  });
+});
 
-        if(!categoryId || !subCategoryId){
-            return response.status(400).json({
-                message : "Provide categoryId and subCategoryId",
-                error : true,
-                success : false
-            })
-        }
+const getProductByCategoryAndSubCategory = asyncHandler(async (req, res) => {
+  let { categoryId, subCategoryId, page, limit } = req.body;
 
-        if(!page){
-            page = 1
-        }
+  if (!categoryId || !subCategoryId) {
+    return res.status(400).json({
+      message: "Provide categoryId and subCategoryId",
+      error: true,
+      success: false,
+    });
+  }
 
-        if(!limit){
-            limit = 10
-        }
+  page = Number(page) || 1;
+  limit = Number(limit) || 10;
 
-        const query = {
-            category : { $in :categoryId  },
-            subCategory : { $in : subCategoryId }
-        }
+  // Ensure ids are arrays
+  const categoryIds = Array.isArray(categoryId) ? categoryId : [categoryId];
+  const subCategoryIds = Array.isArray(subCategoryId) ? subCategoryId : [subCategoryId];
 
-        const skip = (page - 1) * limit
+  const query = {
+    category: { $in: categoryIds },
+    subCategory: { $in: subCategoryIds },
+  };
 
-        const [data,dataCount] = await Promise.all([
-            ProductModel.find(query).sort({createdAt : -1 }).skip(skip).limit(limit),
-            ProductModel.countDocuments(query)
-        ])
+  const skip = (page - 1) * limit;
 
-        return response.json({
-            message : "Product list",
-            data : data,
-            totalCount : dataCount,
-            page : page,
-            limit : limit,
-            success : true,
-            error : false
-        })
+  const [data, dataCount] = await Promise.all([
+    ProductModel.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("category subCategory"),
+    ProductModel.countDocuments(query),
+  ]);
 
-    } catch (error) {
-        return response.status(500).json({
-            message : error.message || error,
-            error : true,
-            success : false
-        })
-    }
-}
+  return res.json({
+    message: "Product list",
+    data,
+    totalCount: dataCount,
+    totalPages: Math.ceil(dataCount / limit),
+    currentPage: page,
+    limit,
+    success: true,
+    error: false,
+  });
+});
 
-export const getProductDetails = async(request,response)=>{
-    try {
-        const { productId } = request.body 
+const getProductDetails = asyncHandler(async (req, res) => {
+  const { productId } = req.body;
 
-        const product = await ProductModel.findOne({ _id : productId })
+  if (!productId) {
+    return res.status(400).json({
+      message: "Product ID is required",
+      error: true,
+      success: false,
+    });
+  }
 
+  const product = await ProductModel.findById(productId).populate("category subCategory");
 
-        return response.json({
-            message : "product details",
-            data : product,
-            error : false,
-            success : true
-        })
+  if (!product) {
+    return res.status(404).json({
+      message: "Product not found",
+      error: true,
+      success: false,
+    });
+  }
 
-    } catch (error) {
-        return response.status(500).json({
-            message : error.message || error,
-            error : true,
-            success : false
-        })
-    }
-}
+  return res.json({
+    message: "Product details",
+    data: product,
+    error: false,
+    success: true,
+  });
+});
 
 //update product
-export const updateProductDetails = async(request,response)=>{
-    try {
-        const { _id } = request.body 
+const updateProductDetails = asyncHandler(async (req, res) => {
+  const { _id, ...updateData } = req.body;
 
-        if(!_id){
-            return response.status(400).json({
-                message : "provide product _id",
-                error : true,
-                success : false
-            })
-        }
+  if (!_id) {
+    return res.status(400).json({
+      message: "Provide product _id",
+      error: true,
+      success: false,
+    });
+  }
 
-        const updateProduct = await ProductModel.updateOne({ _id : _id },{
-            ...request.body
-        })
+  const product = await ProductModel.findById(_id);
+  if (!product) {
+    return res.status(404).json({
+      message: "Product not found",
+      error: true,
+      success: false,
+    });
+  }
 
-        return response.json({
-            message : "updated successfully",
-            data : updateProduct,
-            error : false,
-            success : true
-        })
+  const updatedProduct = await ProductModel.findByIdAndUpdate(
+    _id,
+    updateData,
+    { new: true } // ✅ returns the updated document
+  ).populate("category subCategory");
 
-    } catch (error) {
-        return response.status(500).json({
-            message : error.message || error,
-            error : true,
-            success : false
-        })
-    }
-}
+  return res.json({
+    message: "Updated successfully",
+    data: updatedProduct,
+    error: false,
+    success: true,
+  });
+});
+
+// search product with $text (requires text index)
+const searchProduct = asyncHandler(async (req, res) => {
+  let { search, page, limit } = req.body;
+
+  page = Number(page) || 1;
+  limit = Number(limit) || 10;
+
+  const query = search
+    ? { $text: { $search: search } } // works only if text index exists
+    : {};
+
+  const skip = (page - 1) * limit;
+
+  const [data, dataCount] = await Promise.all([
+    ProductModel.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("category subCategory"),
+    ProductModel.countDocuments(query),
+  ]);
+
+  return res.json({
+    message: "Product data",
+    error: false,
+    success: true,
+    data,
+    totalCount: dataCount,
+    totalPages: Math.ceil(dataCount / limit),
+    currentPage: page,
+    limit,
+  });
+});
 
 //delete product
-export const deleteProductDetails = async(request,response)=>{
-    try {
-        const { _id } = request.body 
+const deleteProductDetails = asyncHandler(async (req, res) => {
+  const { _id } = req.body;
 
-        if(!_id){
-            return response.status(400).json({
-                message : "provide _id ",
-                error : true,
-                success : false
-            })
-        }
+  if (!_id) {
+    throw new ApiError(400, "Product ID (_id) is required");
+  }
 
-        const deleteProduct = await ProductModel.deleteOne({_id : _id })
+  // Find product first
+  const product = await ProductModel.findById(_id);
+  if (!product) {
+    throw new ApiError(404, "Product not found");
+  }
 
-        return response.json({
-            message : "Delete successfully",
-            error : false,
-            success : true,
-            data : deleteProduct
-        })
-    } catch (error) {
-        return response.status(500).json({
-            message : error.message || error,
-            error : true,
-            success : false
-        })
+  // Delete images from Cloudinary if they exist
+  if (Array.isArray(product.image) && product.image.length > 0) {
+    for (const imgUrl of product.image) {
+      try {
+        await deleteOnCloudinary(imgUrl); // ✅ pass full URL
+      } catch (err) {
+        console.warn("Failed to delete image:", imgUrl, err.message);
+      }
     }
-}
+  }
 
-//search product
-export const searchProduct = async(request,response)=>{
-    try {
-        let { search, page , limit } = request.body 
+  // Delete product from DB
+  await ProductModel.deleteOne({ _id });
 
-        if(!page){
-            page = 1
-        }
-        if(!limit){
-            limit  = 10
-        }
+  return res.json({
+    message: "Product deleted successfully",
+    error: false,
+    success: true,
+  });
+});
 
-        const query = search ? {
-            $text : {
-                $search : search
-            }
-        } : {}
-
-        const skip = ( page - 1) * limit
-
-        const [data,dataCount] = await Promise.all([
-            ProductModel.find(query).sort({ createdAt  : -1 }).skip(skip).limit(limit).populate('category subCategory'),
-            ProductModel.countDocuments(query)
-        ])
-
-        return response.json({
-            message : "Product data",
-            error : false,
-            success : true,
-            data : data,
-            totalCount :dataCount,
-            totalPage : Math.ceil(dataCount/limit),
-            page : page,
-            limit : limit 
-        })
-
-
-    } catch (error) {
-        return response.status(500).json({
-            message : error.message || error,
-            error : true,
-            success : false
-        })
-    }
-}
+export {
+  createProductController,
+  getProductController,
+  getProductByCategory,
+  getProductByCategoryAndSubCategory,
+  getProductDetails,
+  updateProductDetails,
+  deleteProductDetails,
+  searchProduct,
+};

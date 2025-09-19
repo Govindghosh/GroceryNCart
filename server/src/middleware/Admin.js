@@ -2,7 +2,7 @@ import User from "../models/user.model.js"
 
 export const admin = async(request,response,next)=>{
     try {
-       const  userId = request.userId
+       const  userId = request.user._id
 
        const user = await User.findById(userId)
 
