@@ -2,7 +2,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import Category from "../models/category.model.js";
 import SubCategory from "../models/subCategory.model.js";
-import ProductModel from "../models/product.model.js";
+import Product from "../models/product.model.js";
 import {uploadOnCloudinary, deleteOnCloudinary, uploadBufferOnCloudinary} from '../utils/cloudinary.js';
 
 const addCategoryController = asyncHandler(async (req, res) => {
@@ -99,7 +99,7 @@ const deleteCategoryController = asyncHandler(async (req, res) => {
 
   // Check if category is in use
   const checkSubCategory = await SubCategory.countDocuments({ category: _id });
-  const checkProduct = await ProductModel.countDocuments({ category: _id });
+  const checkProduct = await Product.countDocuments({ category: _id });
 
   if (checkSubCategory > 0 || checkProduct > 0) {
     throw new ApiError(400, "Category is already in use, cannot delete");

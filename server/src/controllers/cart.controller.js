@@ -1,4 +1,4 @@
-import CartProductModel from "../models/cartproduct.model.js";
+import CartProduct from "../models/cartproduct.model.js";
 import User from "../models/user.model.js";
 
 export const addToCartItemController = async(request,response)=>{
@@ -14,7 +14,7 @@ export const addToCartItemController = async(request,response)=>{
             })
         }
 
-        const checkItemCart = await CartProductModel.findOne({
+        const checkItemCart = await CartProduct.findOne({
             userId : userId,
             productId : productId
         })
@@ -25,7 +25,7 @@ export const addToCartItemController = async(request,response)=>{
             })
         }
 
-        const cartItem = new CartProductModel({
+        const cartItem = new CartProduct({
             quantity : 1,
             userId : userId,
             productId : productId
@@ -59,7 +59,7 @@ export const getCartItemController = async(request,response)=>{
     try {
         const userId = request.userId
 
-        const cartItem =  await CartProductModel.find({
+        const cartItem =  await CartProduct.find({
             userId : userId
         }).populate('productId')
 
@@ -89,7 +89,7 @@ export const updateCartItemQtyController = async(request,response)=>{
             })
         }
 
-        const updateCartitem = await CartProductModel.updateOne({
+        const updateCartitem = await CartProduct.updateOne({
             _id : _id,
             userId : userId
         },{
@@ -125,7 +125,7 @@ export const deleteCartItemQtyController = async(request,response)=>{
         })
       }
 
-      const deleteCartItem  = await CartProductModel.deleteOne({_id : _id, userId : userId })
+      const deleteCartItem  = await CartProduct.deleteOne({_id : _id, userId : userId })
 
       return response.json({
         message : "Item remove",

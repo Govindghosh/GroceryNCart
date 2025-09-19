@@ -1,5 +1,5 @@
 import Stripe from "../config/stripe.js";
-import CartProductModel from "../models/cartproduct.model.js";
+import CartProduct from "../models/cartproduct.model.js";
 import OrderModel from "../models/order.model.js";
 import User from "../models/user.model.js";
 import mongoose from "mongoose";
@@ -29,7 +29,7 @@ import mongoose from "mongoose";
         const generatedOrder = await OrderModel.insertMany(payload)
 
         ///remove from the cart
-        const removeCartItems = await CartProductModel.deleteMany({ userId : userId })
+        const removeCartItems = await CartProduct.deleteMany({ userId : userId })
         const updateInUser = await User.updateOne({ _id : userId }, { shopping_cart : []})
 
         return response.json({
@@ -174,7 +174,7 @@ export async function webhookStripe(request,response){
             const removeCartItems = await  User.findByIdAndUpdate(userId,{
                 shopping_cart : []
             })
-            const removeCartProductDB = await CartProductModel.deleteMany({ userId : userId})
+            const removeCartProductDB = await CartProduct.deleteMany({ userId : userId})
         }
       break;
     default:

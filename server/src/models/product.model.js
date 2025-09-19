@@ -64,6 +64,6 @@ productSchema.index({
 // Create text index
 productSchema.index({ name: "text", description: "text" });
 
-const ProductModel = mongoose.model('product',productSchema)
+const Product = mongoose.model('product',productSchema)
 
-export default ProductModel
+export default Product

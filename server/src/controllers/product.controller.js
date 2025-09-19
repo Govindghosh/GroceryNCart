@@ -1,4 +1,4 @@
-import ProductModel from "../models/product.model.js";
+import Product from "../models/product.model.js";
 import {
   uploadOnCloudinary,
   deleteOnCloudinary,
@@ -44,7 +44,7 @@ const createProductController = asyncHandler(async (req, res) => {
     uploadedImages.push(result.secure_url);
   }
 
-  const product = new ProductModel({
+  const product = new Product({
     name,
     image: uploadedImages,
     category,
@@ -84,12 +84,12 @@ const getProductController = asyncHandler(async (req, res) => {
   const skip = (page - 1) * limit;
 
   const [data, totalCount] = await Promise.all([
-    ProductModel.find(query)
+    Product.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .populate("category subCategory"),
-    ProductModel.countDocuments(query),
+    Product.countDocuments(query),
   ]);
 
   return res.json({
@@ -116,7 +116,7 @@ const getProductByCategory = asyncHandler(async (req, res) => {
   // Ensure id is always an array for $in
   const categoryIds = Array.isArray(id) ? id : [id];
 
-  const products = await ProductModel.find({
+  const products = await Product.find({
     category: { $in: categoryIds },
   })
     .limit(15)
@@ -156,12 +156,12 @@ const getProductByCategoryAndSubCategory = asyncHandler(async (req, res) => {
   const skip = (page - 1) * limit;
 
   const [data, dataCount] = await Promise.all([
-    ProductModel.find(query)
+    Product.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .populate("category subCategory"),
-    ProductModel.countDocuments(query),
+    Product.countDocuments(query),
   ]);
 
   return res.json({
@@ -187,7 +187,7 @@ const getProductDetails = asyncHandler(async (req, res) => {
     });
   }
 
-  const product = await ProductModel.findById(productId).populate("category subCategory");
+  const product = await Product.findById(productId).populate("category subCategory");
 
   if (!product) {
     return res.status(404).json({
@@ -217,7 +217,7 @@ const updateProductDetails = asyncHandler(async (req, res) => {
     });
   }
 
-  const product = await ProductModel.findById(_id);
+  const product = await Product.findById(_id);
   if (!product) {
     return res.status(404).json({
       message: "Product not found",
@@ -226,7 +226,7 @@ const updateProductDetails = asyncHandler(async (req, res) => {
     });
   }
 
-  const updatedProduct = await ProductModel.findByIdAndUpdate(
+  const updatedProduct = await Product.findByIdAndUpdate(
     _id,
     updateData,
     { new: true } // ✅ returns the updated document
@@ -254,12 +254,12 @@ const searchProduct = asyncHandler(async (req, res) => {
   const skip = (page - 1) * limit;
 
   const [data, dataCount] = await Promise.all([
-    ProductModel.find(query)
+    Product.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .populate("category subCategory"),
-    ProductModel.countDocuments(query),
+    Product.countDocuments(query),
   ]);
 
   return res.json({
@@ -283,7 +283,7 @@ const deleteProductDetails = asyncHandler(async (req, res) => {
   }
 
   // Find product first
-  const product = await ProductModel.findById(_id);
+  const product = await Product.findById(_id);
   if (!product) {
     throw new ApiError(404, "Product not found");
   }
@@ -300,7 +300,7 @@ const deleteProductDetails = asyncHandler(async (req, res) => {
   }
 
   // Delete product from DB
-  await ProductModel.deleteOne({ _id });
+  await Product.deleteOne({ _id });
 
   return res.json({
     message: "Product deleted successfully",
