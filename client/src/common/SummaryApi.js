@@ -152,7 +152,11 @@ const SummaryApi = {
     getOrderItems : {
         url : '/api/order/order-list',
         method : 'get'
-    }
+    },
+    paypalPayment_url : {
+        url : "/api/order/paypalcheckout",
+        method : 'post'
+    },
 }
 
-export default SummaryApi
+export default SummaryApi;

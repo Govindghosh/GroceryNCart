@@ -5,6 +5,8 @@ import {
   getOrderDetailsController,
   paymentController,
   webhookStripe,
+  paypalPaymentController,
+  paypalWebhook,
 } from "../controllers/order.controller.js";
 
 const orderRouter = Router();
@@ -12,6 +14,8 @@ const orderRouter = Router();
 orderRouter.post("/cash-on-delivery", auth, CashOnDeliveryOrderController);
 orderRouter.post("/checkout", auth, paymentController);
 orderRouter.post("/webhook", webhookStripe);
+orderRouter.post("/paypalcheckout", auth, paypalPaymentController);
+orderRouter.post("/paypalWebhook", paypalWebhook);
 orderRouter.get("/order-list", auth, getOrderDetailsController);
 
 export default orderRouter;
