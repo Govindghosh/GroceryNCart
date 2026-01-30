@@ -1,29 +1,6 @@
 version: '3.8'
 
 services:
-  # MongoDB Database
-  mongodb:
-    image: mongo:7.0
-    container_name: groceryncart-mongodb
-    restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-changeme123}
-      MONGO_INITDB_DATABASE: groceryncart
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
-    networks:
-      - groceryncart-network
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 40s
-
   # Backend Server
   server:
     build:
@@ -34,41 +11,20 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
-    environment:
-      NODE_ENV: production
-      PORT: 3000
-      MONGODB_URI: ${MONGODB_URI}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
-      ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET}
-      ACCESS_TOKEN_EXPIRY: ${ACCESS_TOKEN_EXPIRY:-48h}
-      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
-      REFRESH_TOKEN_EXPIRY: ${REFRESH_TOKEN_EXPIRY:-7d}
-      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
-      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
-      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
-      RESEND_API: ${RESEND_API}
-      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID}
-      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
-      STRIPE_ENPOINT_WEBHOOK_SECRET_KEY: ${STRIPE_ENPOINT_WEBHOOK_SECRET_KEY}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      SESSION_SECRET: ${SESSION_SECRET}
-    depends_on:
-      mongodb:
-        condition: service_healthy
+    env_file:
+      - ./server/.env
     networks:
       - groceryncart-network
     volumes:
       - ./server/src:/app/src:ro
     healthcheck:
-      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3000/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" ]
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3000/', r => process.exit(r.statusCode === 200 ? 0 : 1))" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  # Frontend Client
+  # Frontend Client (React build served by its own nginx)
   client:
     build:
       context: ./client
@@ -89,7 +45,7 @@ services:
       retries: 3
       start_period: 40s
 
-  # Nginx Reverse Proxy
+  # Nginx Reverse Proxy (Public entry point)
   nginx:
     image: nginx:alpine
     container_name: groceryncart-nginx
@@ -113,14 +69,19 @@ services:
       timeout: 10s
       retries: 3
 
-  # Certbot for SSL certificates (optional - for production)
+  # Certbot (optional – production SSL)
   certbot:
     image: certbot/certbot:latest
     container_name: groceryncart-certbot
     volumes:
       - certbot_www:/var/www/certbot:rw
       - certbot_conf:/etc/letsencrypt:rw
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    entrypoint: >
+      /bin/sh -c "trap exit TERM;
+      while :; do
+        certbot renew;
+        sleep 12h & wait $${!};
+      done;"
     profiles:
       - production
 
@@ -129,10 +90,6 @@ networks:
     driver: bridge
 
 volumes:
-  mongodb_data:
-    driver: local
-  mongodb_config:
-    driver: local
   certbot_www:
     driver: local
   certbot_conf:
