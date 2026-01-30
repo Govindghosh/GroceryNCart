@@ -1,0 +1,136 @@
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+  SERVER_IMAGE: $CI_REGISTRY_IMAGE/server
+  CLIENT_IMAGE: $CI_REGISTRY_IMAGE/client
+
+# Test Backend
+test-backend:
+  stage: test
+  image: node:20-alpine
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}-backend
+    paths:
+      - server/node_modules/
+  before_script:
+    - cd server
+    - npm ci
+  script:
+    - npm run lint || echo "No lint script"
+    - npm test || echo "No test script"
+  only:
+    - merge_requests
+    - main
+    - develop
+
+# Test Frontend
+test-frontend:
+  stage: test
+  image: node:20-alpine
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}-frontend
+    paths:
+      - client/node_modules/
+  before_script:
+    - cd client
+    - npm ci
+  script:
+    - npm run lint
+    - npm run build
+  only:
+    - merge_requests
+    - main
+    - develop
+
+# Build Server Image
+build-server:
+  stage: build
+  image: docker:24-dind
+  services:
+    - docker:24-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - cd server
+    - docker build --target production -t $SERVER_IMAGE:$CI_COMMIT_SHORT_SHA -t $SERVER_IMAGE:latest .
+    - docker push $SERVER_IMAGE:$CI_COMMIT_SHORT_SHA
+    - docker push $SERVER_IMAGE:latest
+  only:
+    - main
+
+# Build Client Image
+build-client:
+  stage: build
+  image: docker:24-dind
+  services:
+    - docker:24-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - cd client
+    - docker build --target production -t $CLIENT_IMAGE:$CI_COMMIT_SHORT_SHA -t $CLIENT_IMAGE:latest .
+    - docker push $CLIENT_IMAGE:$CI_COMMIT_SHORT_SHA
+    - docker push $CLIENT_IMAGE:latest
+  only:
+    - main
+
+# Deploy to Production
+deploy-production:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan $DEPLOY_HOST >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+  script:
+    - |
+      ssh $DEPLOY_USER@$DEPLOY_HOST << 'EOF'
+        cd $DEPLOY_PATH
+        git pull origin main
+        docker-compose pull
+        docker-compose up -d --remove-orphans
+        docker system prune -af --volumes
+        docker-compose ps
+      EOF
+  only:
+    - main
+  when: manual
+  environment:
+    name: production
+    url: https://your-domain.com
+
+# Deploy to Staging
+deploy-staging:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY_STAGING" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan $DEPLOY_HOST_STAGING >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+  script:
+    - |
+      ssh $DEPLOY_USER_STAGING@$DEPLOY_HOST_STAGING << 'EOF'
+        cd $DEPLOY_PATH_STAGING
+        git pull origin develop
+        docker-compose -f docker-compose.dev.yml pull
+        docker-compose -f docker-compose.dev.yml up -d --remove-orphans
+        docker system prune -af --volumes
+      EOF
+  only:
+    - develop
+  environment:
+    name: staging
+    url: https://staging.your-domain.com

@@ -150,3 +150,30 @@ __pycache__/
 firebase-debug.log
 functions/node_modules/
 amplify/#current-cloud-backend
+
+# --------------------------
+# Docker & Deployment
+# --------------------------
+# Docker volumes and data
+docker-data/
+volumes/
+*.tar.gz
+
+# Backups
+backups/
+*.dump
+*.archive
+*.archive.gz
+*.backup
+
+# SSL Certificates (Let's Encrypt)
+certbot/
+letsencrypt/
+ssl/
+*.pem
+*.crt
+*.key
+
+# Deployment logs
+deploy.log
+deployment-*.log
