@@ -1,7 +1,9 @@
 version: '3.8'
 
 services:
+  # =====================
   # Backend Server
+  # =====================
   server:
     build:
       context: ./server
@@ -18,13 +20,15 @@ services:
     volumes:
       - ./server/src:/app/src:ro
     healthcheck:
-      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3000/', r => process.exit(r.statusCode === 200 ? 0 : 1))" ]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000', r => process.exit(r.statusCode === 200 ? 0 : 1))"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  # Frontend Client (React build served by its own nginx)
+  # =====================
+  # Frontend Client
+  # =====================
   client:
     build:
       context: ./client
@@ -39,13 +43,15 @@ services:
     networks:
       - groceryncart-network
     healthcheck:
-      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/" ]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  # Nginx Reverse Proxy (Public entry point)
+  # =====================
+  # Nginx Reverse Proxy
+  # =====================
   nginx:
     image: nginx:alpine
     container_name: groceryncart-nginx
@@ -64,12 +70,14 @@ services:
     networks:
       - groceryncart-network
     healthcheck:
-      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/" ]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # Certbot (optional – production SSL)
+  # =====================
+  # Certbot (SSL Renew)
+  # =====================
   certbot:
     image: certbot/certbot:latest
     container_name: groceryncart-certbot
